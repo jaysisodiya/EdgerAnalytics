@@ -1,20 +1,23 @@
-"""
-Pending Items
-- Exception handling
-"""
-
+import sys
 import os
 import datetime
 from collections import OrderedDict
 
-# Files necessary to test the program. Ensure that directory path names are correct and relative paths are accurate.
+# We are expecting three arguments to our program.
+# arg1: full path name to our input file log.csv
+# arg2: input file that specifies inactivity period in seconds
+# arg3: full path name to our output file sessionization.txt
 
-timeoutfile_path = os.path.normpath("../input/inactivity_period.txt")
-weblogfile_path = os.path.normpath("../input/log.csv")
-outputfile_path = os.path.normpath("../output/sessionization.txt")
+weblogfile_path = os.path.normpath(sys.argv[1])
+timeoutfile_path = os.path.normpath(sys.argv[2])
+outputfile_path = os.path.normpath(sys.argv[3])
 
-col_delimiter = ','                     # Column Delimiter in input and output files
-datetime_fmt = '%Y-%m-%d %H:%M:%S'      # Datetime format
+#timeoutfile_path = os.path.normpath("../insight_testsuite/tests/my_test03/input/inactivity_period.txt")
+#weblogfile_path = os.path.normpath("../insight_testsuite/tests/my_test03/input/log.csv")
+#outputfile_path = os.path.normpath("../insight_testsuite/tests/my_test03/output/sessionization.txt")
+
+col_delimiter = ','  # Column Delimiter in input and output files
+datetime_fmt = '%Y-%m-%d %H:%M:%S'  # Datetime format
 
 # Two dictionaries will be used to process the data from input file.
 # We have need to effectively lookup against ip addresses as well as against datetime
@@ -29,15 +32,15 @@ last_date = None
 last_time = None
 last_datetime = None
 
+
 # Funtion to return difference in seconds between two string datetime values provided in datatime_fmt
 
-def getSessDuration(begtime,endtime):
+def getSessDuration(begtime, endtime):
     endtime_obj = datetime.datetime.strptime(endtime, datetime_fmt)
     begtime_obj = datetime.datetime.strptime(begtime, datetime_fmt)
     sess_duration = endtime_obj - begtime_obj
-
     # Note that beg / end times are inclusive so need to add 1 to the difference
-    return int(sess_duration.total_seconds())+1
+    return int(sess_duration.total_seconds()) + 1
 
 
 # Funtion to record the session details to output file
@@ -48,14 +51,14 @@ def recordSessionInfo(outf, ipaddr, iprec):
     sess_duration = getSessDuration(sess_begtime, sess_lastime)
     sess_requests = iprec[4]
 
+    # Construct the output string
     outstr = ipaddr + col_delimiter + sess_begtime + col_delimiter + \
              sess_lastime + col_delimiter + str(sess_duration) + col_delimiter \
              + str(sess_requests) + '\n'
-
-    print(outstr)
     outf.write(outstr)
 
     return None
+
 
 # Get the duration to define inactive session. This is expected to be in seconds from 1 to 86400.
 
@@ -66,14 +69,13 @@ with open(timeoutfile_path, 'r') as ftimeout:
 # Begin Processing the Weblog.
 
 with open(weblogfile_path, 'r') as fweblog:
-
     # Process the header line. Get the column locations for columns of interest.
     # This step potentially can be eliminated if order of columns is confirmed to be consistent.
 
     header_line = fweblog.readline()
     header_line = header_line.rstrip('\n')
 
-    colnames = header_line.split(col_delimiter)     # Convert header line to a list
+    colnames = header_line.split(col_delimiter)  # Convert header line to a list
 
     # Locate the position for each column of interest, assumed col headings are consistent.
 
@@ -110,8 +112,6 @@ with open(weblogfile_path, 'r') as fweblog:
             curr_time = colvalues[timePos]
             curr_datetime = curr_date + ' ' + curr_time
 
-            # we need to purge for inactive sessions
-
             # For the first weblog record in the file, we just need to check this.
 
             if last_datetime is None:
@@ -136,6 +136,7 @@ with open(weblogfile_path, 'r') as fweblog:
 
                 inactiv_sess = set()
                 remove_keys = []
+
                 for key, value in datetime_dict.items():
                     if key >= cutoff_datetime:
                         break
@@ -160,29 +161,14 @@ with open(weblogfile_path, 'r') as fweblog:
 
                     if sess_lastime < cutoff_datetime:
                         remove_sess.append(each_ip)
-
-                        recordSessionInfo(foutfile,each_ip,ip_dict[each_ip])
-#                        sess_begtime = ip_dict[each_ip][0] + ' ' + ip_dict[each_ip][1]
-#                        sess_duration = getSessDuration(sess_begtime, sess_lastime)
-#                        sess_requests = ip_dict[each_ip][4]
-#
-#                        outstr = each_ip + col_delimiter + sess_begtime + col_delimiter + \
-#                                sess_lastime + col_delimiter + str(sess_duration) + col_delimiter \
-#                                + str(sess_requests) + '\n'
-#
-#                        print(outstr)
-#                        foutfile.write(outstr)
+                        recordSessionInfo(foutfile, each_ip, ip_dict[each_ip])
 
                 # Removing old ip dict records with completed sessions
 
                 for key in remove_sess:
                     ip_dict.pop(key)
 
-                print("Removing key ", remove_keys)
-                print("Removing sess ", remove_sess)
-                inactiv_sess.clear()
-
-                last_datetime = curr_datetime
+            last_datetime = curr_datetime
 
             # ip dictionary will have ip address as key and value will be a list of attributes necessary to
             # understand session and requests.
@@ -199,9 +185,15 @@ with open(weblogfile_path, 'r') as fweblog:
             # datetime dictionary will have all unique log entry timestamps as keys.
             # the values for each timestamp will be all ip addresses recorded at that timestamp
 
-            if curr_datetime in datetime_dict:
-                datetime_dict[curr_datetime].append(curr_ip)
-            else:
-                datetime_dict[curr_datetime] = [curr_ip]
+            if curr_datetime not in datetime_dict:
+                datetime_dict[curr_datetime] = set()
 
+            datetime_dict[curr_datetime].add(curr_ip)
+
+        # Now that all lines in the weblog have been processed, mark all sessions completed in output file
+        for key, value in ip_dict.items():
+            recordSessionInfo(foutfile, key, value)
+
+# ip_dict.clear()
+# datetime_dict.clear()
 print("Complete")

@@ -1,16 +1,20 @@
+import sys
 import os
 import datetime
 from collections import OrderedDict
 
-# Files necessary to test the program. Ensure that directory path names are correct and relative paths are accurate.
+# We are expecting three arguments to our program.
+# arg1: full path name to our input file log.csv
+# arg2: input file that specifies inactivity period in seconds
+# arg3: full path name to our output file sessionization.txt
 
-# timeoutfile_path = os.path.normpath("../input/inactivity_period.txt")
-# weblogfile_path = os.path.normpath("../input/log.csv")
-# outputfile_path = os.path.normpath("../output/sessionization.txt")
+weblogfile_path = os.path.normpath(sys.argv[1])
+timeoutfile_path = os.path.normpath(sys.argv[2])
+outputfile_path = os.path.normpath(sys.argv[3])
 
-timeoutfile_path = os.path.normpath("../insight_testsuite/tests/my_test04/input/inactivity_period.txt")
-weblogfile_path = os.path.normpath("../insight_testsuite/tests/my_test04/input/log.csv")
-outputfile_path = os.path.normpath("../insight_testsuite/tests/my_test04/output/sessionization.txt")
+#timeoutfile_path = os.path.normpath("../insight_testsuite/tests/my_test03/input/inactivity_period.txt")
+#weblogfile_path = os.path.normpath("../insight_testsuite/tests/my_test03/input/log.csv")
+#outputfile_path = os.path.normpath("../insight_testsuite/tests/my_test03/output/sessionization.txt")
 
 col_delimiter = ','  # Column Delimiter in input and output files
 datetime_fmt = '%Y-%m-%d %H:%M:%S'  # Datetime format
@@ -18,7 +22,7 @@ datetime_fmt = '%Y-%m-%d %H:%M:%S'  # Datetime format
 # Two dictionaries will be used to process the data from input file.
 # We have need to effectively lookup against ip addresses as well as against datetime
 
-ip_dict = {}
+ip_dict = OrderedDict()
 datetime_dict = OrderedDict()
 
 curr_date = None
@@ -55,6 +59,15 @@ def recordSessionInfo(outf, ipaddr, iprec):
 
     return None
 
+# Function to remove duplicates from the list of ip addresses
+
+def removeDups(iplist):
+    ip_outlist = []
+    for value in iplist:
+        if value not in ip_outlist:
+            ip_outlist.append(value)
+
+    return ip_outlist
 
 # Get the duration to define inactive session. This is expected to be in seconds from 1 to 86400.
 
@@ -114,7 +127,7 @@ with open(weblogfile_path, 'r') as fweblog:
                 last_datetime = curr_datetime
 
             # If the timestamp of current record in the weblog file is higher than last record processed,
-            # we need to check for past session completions provided inactivity period is past
+            # we need to check for past session completions provided inactivity period has passed
 
             if curr_datetime > last_datetime:
 
@@ -130,7 +143,7 @@ with open(weblogfile_path, 'r') as fweblog:
                 # From the ordered dict datatime_dict for each timestamp that is older than cutoff datetime
                 # get all potential completed sessions .. in unique list using set. Purge these dict entries.
 
-                inactiv_sess = set()
+                inactiv_sess = []
                 remove_keys = []
 
                 for key, value in datetime_dict.items():
@@ -138,7 +151,7 @@ with open(weblogfile_path, 'r') as fweblog:
                         break
 
                     for each_ip in value:
-                        inactiv_sess.add(each_ip)
+                        inactiv_sess.append(each_ip)
 
                     remove_keys.append(key)
 
@@ -149,6 +162,7 @@ with open(weblogfile_path, 'r') as fweblog:
 
                 # Process now the possible session completions
 
+                inactiv_sess = removeDups(inactiv_sess)
                 remove_sess = []
                 for each_ip in inactiv_sess:
                     sess_lastime = ip_dict[each_ip][2] + ' ' + ip_dict[each_ip][3]
@@ -182,9 +196,9 @@ with open(weblogfile_path, 'r') as fweblog:
             # the values for each timestamp will be all ip addresses recorded at that timestamp
 
             if curr_datetime not in datetime_dict:
-                datetime_dict[curr_datetime] = set()
+                datetime_dict[curr_datetime] = []
 
-            datetime_dict[curr_datetime].add(curr_ip)
+            datetime_dict[curr_datetime].append(curr_ip)
 
         # Now that all lines in the weblog have been processed, mark all sessions completed in output file
         for key, value in ip_dict.items():
